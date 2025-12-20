@@ -1,39 +1,998 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# Pipo Firebase App Distribution 🚀
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+A powerful Dart CLI tool that automatically generates build configuration from your Firebase setup and simplifies building and uploading APK/IPA files to Firebase App Distribution.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+[![pub package](https://img.shields.io/pub/v/pipo_firebase_app_distribution.svg)](https://pub.dev/packages/pipo_firebase_app_distribution)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+## ✨ Features
 
-## Features
+- 🔍 **Auto-Detection**: Automatically scans and extracts Firebase configuration from:
+  - `android/app/google-services.json` (Android)
+  - `android/app/src/{flavor}/google-services.json` (Flavor-specific)
+  - `ios/Runner/GoogleService-Info.plist` (iOS)
+  - `ios/Runner/Firebase/{flavor}/GoogleService-Info.plist` (Flavor-specific)
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- 📝 **Smart Template Generation**: Generates a complete `build.yaml` configuration file with:
+  - Project information from `pubspec.yaml`
+  - All detected Firebase App IDs (Android & iOS)
+  - Environment-specific settings (dev, staging, production)
+  - Build presets for common workflows
+  - Platform-specific configurations
 
-## Getting started
+- 🚀 **Automated Build & Deploy**: Single command to build and upload to Firebase:
+  - Build APK/IPA for specific environments
+  - Auto-increment version numbers
+  - Generate release notes from git commits
+  - Upload to Firebase App Distribution
+  - Create git tags automatically
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+- 🔐 **Smart Authentication**: Flexible Firebase authentication:
+  - Auto-login with browser
+  - Manual token input
+  - Multi-account support with account switching
+  - Persistent token storage
 
-## Usage
+- 📊 **Error Logging**: Comprehensive error logging:
+  - Build errors saved to `.pipo_logs/`
+  - Upload errors with Firebase CLI output
+  - Auto-gitignore for sensitive files
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+- 🎯 **Zero Configuration**: Just run `pipo_firebase init` and you're ready to go!
 
-```dart
-const like = 'sample';
+- 🔄 **Multi-Environment Support**: Automatically detects environments from:
+  - File paths (e.g., `src/dev/`, `Firebase/staging/`)
+  - Bundle IDs (e.g., `com.example.app.dev`)
+  - Product flavors in `build.gradle`
+
+## 📦 Installation
+
+### Global Installation (Recommended)
+
+```bash
+dart pub global activate pipo_firebase_app_distribution
 ```
 
-## Additional information
+After installation, you can use the command:
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+```bash
+pipo_firebase init
+pipo_firebase deploy dev
+```
+
+### Local Installation
+
+Add to your `pubspec.yaml`:
+
+```yaml
+dev_dependencies:
+  pipo_firebase_app_distribution: ^0.0.1
+```
+
+Then run:
+
+```bash
+dart pub get
+```
+
+Use with:
+
+```bash
+dart run pipo_firebase init
+dart run pipo_firebase deploy dev
+```
+
+## 🚀 Quick Start
+
+### 1. Prerequisites
+
+- Flutter SDK installed and configured
+- Firebase CLI installed (`npm install -g firebase-tools`)
+- Firebase project created with App Distribution enabled
+- Firebase configuration files in your project:
+  - `google-services.json` for Android
+  - `GoogleService-Info.plist` for iOS
+
+### 2. Initialize Configuration
+
+Navigate to your Flutter project root and run:
+
+```bash
+pipo_firebase init
+```
+
+This command will:
+- Scan for Firebase configuration files
+- Extract product flavors from `build.gradle`
+- Match flavors with Firebase clients
+- Extract all Firebase App IDs and project settings
+- Generate a `build.yaml` file with complete configuration
+
+**Example Output:**
+
+```bash
+🔍 Initializing Firebase App Distribution configuration...
+
+📱 Scanning for Firebase configurations
+
+✅ Firebase configurations scanned
+
+📋 Found Firebase configurations:
+
+  🤖 ANDROID (dev)
+     App ID: 1:123:android:abc123
+     Bundle ID: com.example.app.dev
+     Project: my-project-123
+
+  🤖 ANDROID (staging)
+     App ID: 1:123:android:def456
+     Bundle ID: com.example.app.staging
+     Project: my-project-123
+
+  🤖 ANDROID (production)
+     App ID: 1:123:android:ghi789
+     Bundle ID: com.example.app
+     Project: my-project-123
+
+  🍎 IOS (dev)
+     App ID: 1:123:ios:jkl012
+     Bundle ID: com.example.app.dev
+     Project: my-project-123
+
+⚙️  Generating build.yaml
+
+✅ build.yaml generated successfully
+
+🎉 Firebase App Distribution initialized successfully!
+
+📄 Generated file: build.yaml
+
+Next steps:
+  1. Review and customize build.yaml
+  2. Run build command to test the configuration
+  3. Upload to Firebase App Distribution
+
+📚 Documentation: https://pub.dev/packages/pipo_firebase_app_distribution
+```
+
+### 3. Review Generated Configuration
+
+The generated `build.yaml` will look like this:
+
+```yaml
+# Firebase App Distribution Build Configuration
+# Auto-generated by pipo_firebase
+
+project:
+  name: "my_app"
+  version: "1.0.0+1"
+
+firebase:
+  project_id: "my-project-123"
+  project_number: "123456789"
+  timeout: 600
+
+# Environment configurations
+environments:
+  dev:
+    android_app_id: "1:123:android:abc123"
+    android_bundle_id: "com.example.app.dev"
+    ios_app_id: "1:123:ios:jkl012"
+    ios_bundle_id: "com.example.app.dev"
+    group: "internal-testers"
+
+    setup:
+      build_mode: release
+      upload: true
+      obfuscate: false
+      auto_increment: true
+      clean: true
+
+  staging:
+    android_app_id: "1:123:android:def456"
+    android_bundle_id: "com.example.app.staging"
+    ios_app_id: "1:123:ios:mno345"
+    ios_bundle_id: "com.example.app.staging"
+    group: "qa-team"
+
+    setup:
+      build_mode: release
+      upload: true
+      obfuscate: true
+      auto_increment: true
+      clean: true
+
+  production:
+    android_app_id: "1:123:android:ghi789"
+    android_bundle_id: "com.example.app"
+    ios_app_id: "1:123:ios:pqr678"
+    ios_bundle_id: "com.example.app"
+    group: "release-team"
+
+    setup:
+      build_mode: release
+      upload: true
+      obfuscate: true
+      auto_increment: true
+      clean: true
+
+# Build presets
+presets:
+  quick-dev:
+    environment: dev
+    build_mode: debug
+    upload: false
+    clean: false
+
+  test-build:
+    environment: staging
+    build_mode: release
+    upload: false
+    clean: true
+
+  production-release:
+    environment: production
+    build_mode: release
+    upload: true
+    clean: true
+    increment: true
+
+# Default settings
+defaults:
+  build_mode: release
+  upload: true
+  clean: true
+  auto_increment: true
+  obfuscate: false
+
+# Platform-specific settings
+platforms:
+  android:
+    build_format: apk  # or aab for Play Store
+    flavor_dimension: environment
+
+  ios:
+    export_method: development  # or app-store, ad-hoc, enterprise
+    team_id: ""  # Add your Apple Team ID here
+```
+
+### 4. Customize Configuration
+
+Edit `build.yaml` to match your project needs:
+- Update distribution groups
+- Adjust build settings per environment
+- Configure platform-specific options
+
+### 5. Deploy to Firebase
+
+Deploy your app to Firebase App Distribution:
+
+```bash
+# Deploy dev environment (both Android and iOS)
+pipo_firebase deploy dev
+
+# Deploy only Android
+pipo_firebase deploy dev --platform android
+
+# Deploy only iOS
+pipo_firebase deploy staging --platform ios
+
+# Build without uploading
+pipo_firebase deploy dev --skip-upload
+
+# Upload existing build without rebuilding
+pipo_firebase deploy production --skip-build
+```
+
+## 📖 Usage
+
+### Available Commands
+
+```bash
+# Initialize Firebase App Distribution configuration
+pipo_firebase init
+
+# Deploy app to Firebase App Distribution
+pipo_firebase deploy <environment> [options]
+
+# Show help
+pipo_firebase --help
+
+# Show version
+pipo_firebase --version
+
+# Show deploy command help
+pipo_firebase deploy --help
+```
+
+### Command Details
+
+#### `init` Command
+
+Scans your project for Firebase configuration files and generates a complete `build.yaml` template.
+
+**What it does:**
+
+1. **Scans Product Flavors** (Android):
+   - Reads `android/app/build.gradle`
+   - Extracts `productFlavors` configuration
+   - Gets `applicationId` for each flavor
+
+2. **Searches for Firebase Config Files**:
+   - Android: `google-services.json` in:
+     - `android/app/google-services.json`
+     - `android/app/src/{flavor}/google-services.json`
+
+   - iOS: `GoogleService-Info.plist` in:
+     - `ios/Runner/GoogleService-Info.plist`
+     - `ios/Runner/Firebase/{flavor}/GoogleService-Info.plist`
+
+3. **Extracts Configuration**:
+   - Firebase Project ID and Project Number
+   - Firebase App ID (for App Distribution)
+   - Bundle ID / Package Name
+   - Environment (automatically detected)
+
+4. **Matches Flavors with Firebase Clients**:
+   - Only includes flavors defined in `build.gradle`
+   - Matches by `applicationId` from flavor config
+   - Falls back to environment name matching
+
+5. **Reads Project Info**:
+   - Project name from `pubspec.yaml`
+   - Current version from `pubspec.yaml`
+
+6. **Generates `build.yaml`**:
+   - All detected configurations
+   - Recommended settings per environment
+   - Build presets
+   - Platform-specific options
+
+**Usage:**
+
+```bash
+pipo_firebase init
+```
+
+#### `deploy` Command
+
+Builds and deploys your app to Firebase App Distribution.
+
+**Syntax:**
+
+```bash
+pipo_firebase deploy <environment> [options]
+```
+
+**Arguments:**
+
+- `<environment>`: Environment to deploy (must match one defined in `build.yaml`)
+  - Examples: `dev`, `staging`, `production`
+
+**Options:**
+
+- `--platform, -p`: Platform to build (`android`, `ios`, or `both`)
+  - Default: `both`
+  - Example: `--platform android`
+
+- `--skip-build`: Skip building the app
+  - Use when you want to upload an existing build
+  - Example: `--skip-build`
+
+- `--skip-upload`: Skip uploading to Firebase
+  - Use when you only want to build without uploading
+  - Example: `--skip-upload`
+
+- `--skip-version-increment`: Skip incrementing version number
+  - Default: auto-increments based on `build.yaml` config
+  - Example: `--skip-version-increment`
+
+- `--skip-git-tag`: Skip creating git tags
+  - Example: `--skip-git-tag`
+
+- `--help, -h`: Show help for deploy command
+
+**What it does:**
+
+1. ✅ Reads build configuration from `build.yaml`
+2. 📊 Auto-increments version number (if configured)
+3. 🔨 Builds APK/IPA for specified platform(s)
+4. 📝 Generates release notes from git commits
+5. ☁️  Uploads to Firebase App Distribution
+6. 🏷️  Creates git tags and commits changes
+
+**Examples:**
+
+```bash
+# Deploy dev environment (both platforms)
+pipo_firebase deploy dev
+
+# Deploy staging for Android only
+pipo_firebase deploy staging --platform android
+
+# Deploy production for iOS only
+pipo_firebase deploy production --platform ios
+
+# Build only, don't upload
+pipo_firebase deploy dev --skip-upload
+
+# Upload existing build without rebuilding
+pipo_firebase deploy dev --skip-build
+
+# Deploy without incrementing version
+pipo_firebase deploy staging --skip-version-increment
+
+# Deploy without git operations
+pipo_firebase deploy production --skip-git-tag
+```
+
+**Deployment Process:**
+
+When you run `pipo_firebase deploy dev`, the following happens:
+
+```bash
+╔══════════════════════════════════════════════════════════════╗
+║        🚀 Pipo Firebase App Distribution Deploy 🚀            ║
+║        Build & Upload to Firebase App Distribution           ║
+╚══════════════════════════════════════════════════════════════╝
+
+🚀 Starting deployment for dev environment
+
+📋 Reading build configuration...
+✅ Configuration loaded
+
+🔄 Auto-incrementing version: 1.0.0+1 → 1.0.0+2
+
+📱 Platforms: android, ios
+
+═══════════════════════════════════════════════════════════════
+  BUILD PHASE
+═══════════════════════════════════════════════════════════════
+
+╭─────────────────────────────────────────────────────────────╮
+│  🔨 Building ANDROID                                         │
+╰─────────────────────────────────────────────────────────────╯
+
+⏳ Building APK for dev (release)
+✅ Build completed successfully
+
+📱 Artifact: app-dev-release.apk
+📁 Location: /path/to/build/app/outputs/flutter-apk/app-dev-release.apk
+📏 Size: 42.5 MB
+
+╭─────────────────────────────────────────────────────────────╮
+│  🔨 Building IOS                                             │
+╰─────────────────────────────────────────────────────────────╯
+
+⏳ Building IPA for dev (release)
+✅ Build completed successfully
+
+📱 Artifact: my_app.ipa
+📁 Location: /path/to/build/ios/ipa/my_app.ipa
+📏 Size: 38.2 MB
+
+✅ All builds completed successfully!
+
+📝 Generating release notes...
+✅ Release notes generated
+
+═══════════════════════════════════════════════════════════════
+  UPLOAD PHASE
+═══════════════════════════════════════════════════════════════
+
+╭─────────────────────────────────────────────────────────────╮
+│  ☁️  Uploading ANDROID to Firebase                          │
+╰─────────────────────────────────────────────────────────────╯
+
+📤 Starting upload to Firebase App Distribution...
+   App ID: 1:123:android:abc123
+   Groups: internal-testers
+
+⏳ Uploading artifact
+✅ Upload completed successfully
+
+🎉 App successfully distributed to Firebase!
+
+📱 App ID: 1:123:android:abc123
+👥 Groups: internal-testers
+
+🔗 Check Firebase Console for distribution link
+
+╭─────────────────────────────────────────────────────────────╮
+│  ☁️  Uploading IOS to Firebase                              │
+╰─────────────────────────────────────────────────────────────╯
+
+📤 Starting upload to Firebase App Distribution...
+   App ID: 1:123:ios:jkl012
+   Groups: internal-testers
+
+⏳ Uploading artifact
+✅ Upload completed successfully
+
+🎉 App successfully distributed to Firebase!
+
+✅ All uploads completed successfully!
+
+🏷️  Creating git tags...
+✅ Git tags created
+
+╔══════════════════════════════════════════════════════════════╗
+║                   🎉 DEPLOYMENT COMPLETE 🎉                   ║
+╚══════════════════════════════════════════════════════════════╝
+
+📊 Deployment Summary:
+   Environment:     dev
+   Version:         1.0.0+2
+   Platforms:       android, ios
+   Uploaded:        ✅ Yes
+
+🔗 Next Steps:
+   • Check Firebase Console for distribution status
+   • Notify testers via Firebase App Distribution
+   • Monitor crash reports and feedback
+```
+
+## 🔐 Firebase Authentication
+
+The CLI supports multiple authentication methods:
+
+### 1. Auto-Login (Recommended)
+
+When you first run deploy, the CLI will automatically open your browser for authentication:
+
+```bash
+╔══════════════════════════════════════════════════════════════╗
+║              🔐 Firebase Authentication Required              ║
+╚══════════════════════════════════════════════════════════════╝
+
+You need to authenticate with Firebase to access project:
+   Project ID: my-project-123
+
+Choose authentication method:
+   1. Auto-login (Browser will open automatically)
+   2. Manual login (You open browser manually and paste token)
+   3. Skip (Continue without upload)
+
+Enter your choice (1/2/3): 1
+
+🌐 Opening browser for authentication...
+
+✅ Successfully authenticated with Firebase!
+
+🔍 Verifying access to project my-project-123...
+✅ Access verified!
+
+🔑 Generating authentication token for persistent storage...
+   This will open a browser window
+
+✅ Token generated successfully!
+✅ Token saved to .firebase-token
+✨ You won't need to login again for this project!
+```
+
+### 2. Multi-Account Support
+
+If the authenticated account doesn't have access to the project, the CLI will offer to switch accounts:
+
+```bash
+❌ The authenticated account does not have access to project: my-project-123
+
+The project is not available in your current Firebase account.
+
+Would you like to switch to a different Google account?
+   1. Yes, open browser to login with different account
+   2. No, skip authentication
+
+Enter your choice (1/2): 1
+
+🔄 Switching Firebase account...
+
+✅ Logged out from current account
+
+🌐 Opening browser to login with different account...
+   Please select the Google account that has access to:
+   Project: my-project-123
+
+✅ Successfully logged in!
+
+🔍 Verifying access to project my-project-123...
+✅ Access verified!
+```
+
+### 3. Manual Login
+
+If auto-login fails, you can manually provide a token:
+
+```bash
+╔══════════════════════════════════════════════════════════════╗
+║                    📝 Manual Login Steps                      ║
+╚══════════════════════════════════════════════════════════════╝
+
+Please follow these steps:
+
+1. Open this URL in your browser:
+   https://console.firebase.google.com/project/my-project-123/overview
+
+2. Login with your Google account that has access to this project
+
+3. Open terminal and run this command:
+   firebase login:ci
+
+4. Copy the token from the output
+
+5. Come back here and paste the token
+
+Paste your Firebase token here (or press Enter to skip):
+```
+
+### 4. Token Storage
+
+The CLI stores your Firebase token in `.firebase-token` for future use:
+- Token is auto-gitignored
+- Token is validated before each use
+- Expired tokens are automatically refreshed
+
+## 🏗️ Project Structure
+
+Your Flutter project should have the following structure:
+
+```
+my_flutter_app/
+├── android/
+│   └── app/
+│       ├── build.gradle                           # Product flavors defined here
+│       ├── google-services.json                    # Main Android config (optional)
+│       └── src/
+│           ├── dev/
+│           │   └── google-services.json           # Dev flavor
+│           ├── staging/
+│           │   └── google-services.json           # Staging flavor
+│           └── production/
+│               └── google-services.json           # Production flavor
+│
+├── ios/
+│   └── Runner/
+│       ├── GoogleService-Info.plist               # Main iOS config (optional)
+│       └── Firebase/
+│           ├── dev/
+│           │   └── GoogleService-Info.plist      # Dev flavor
+│           ├── staging/
+│           │   └── GoogleService-Info.plist      # Staging flavor
+│           └── production/
+│               └── GoogleService-Info.plist      # Production flavor
+│
+├── pubspec.yaml
+├── build.yaml                                     # Generated by pipo_firebase init
+├── .firebase-token                                # Auto-generated (gitignored)
+└── .pipo_logs/                                    # Error logs (gitignored)
+```
+
+## 🔧 Configuration
+
+### Environment Detection
+
+The tool automatically detects environments by:
+
+1. **Reading product flavors from `build.gradle`**:
+```gradle
+android {
+    flavorDimensions "environment"
+
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+        }
+
+        staging {
+            dimension "environment"
+            applicationIdSuffix ".staging"
+        }
+
+        production {
+            dimension "environment"
+        }
+    }
+}
+```
+
+2. **Matching with Firebase clients**:
+   - First tries to match by `applicationId` from flavor config
+   - Falls back to matching by environment name from file path or bundle ID
+
+3. **Only includes configured flavors**:
+   - Ignores extra clients in `google-services.json`
+   - Only generates config for flavors defined in `build.gradle`
+
+### Build Configuration Options
+
+#### Environment Setup
+
+```yaml
+environments:
+  dev:
+    setup:
+      build_mode: release        # debug or release
+      upload: true              # Upload to Firebase after build
+      obfuscate: false          # Enable code obfuscation
+      auto_increment: true      # Auto-increment build number
+      clean: true               # Clean before build
+```
+
+#### Platform Settings
+
+```yaml
+platforms:
+  android:
+    build_format: apk          # apk or aab
+    flavor_dimension: environment
+
+  ios:
+    export_method: development  # development, app-store, ad-hoc, enterprise
+    team_id: "ABCDEF1234"      # Your Apple Team ID
+```
+
+### Distribution Groups
+
+Default groups assigned per environment:
+- **dev**: `internal-testers`
+- **staging**: `qa-team`
+- **production**: `release-team`
+
+You can customize these in `build.yaml`:
+
+```yaml
+environments:
+  dev:
+    group: "my-custom-group"
+```
+
+## 📱 Platform Support
+
+### Android
+
+Extracts from `google-services.json`:
+```json
+{
+  "project_info": {
+    "project_id": "my-project-123",
+    "project_number": "123456789"
+  },
+  "client": [{
+    "client_info": {
+      "mobilesdk_app_id": "1:123:android:abc123",
+      "android_client_info": {
+        "package_name": "com.example.app.dev"
+      }
+    }
+  }]
+}
+```
+
+### iOS
+
+Extracts from `GoogleService-Info.plist`:
+```xml
+<key>PROJECT_ID</key>
+<string>my-project-123</string>
+<key>GCM_SENDER_ID</key>
+<string>123456789</string>
+<key>GOOGLE_APP_ID</key>
+<string>1:123:ios:jkl012</string>
+<key>BUNDLE_ID</key>
+<string>com.example.app.dev</string>
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### 1. No Firebase configuration found
+
+**Error:**
+```
+❌ No Firebase configuration files found!
+
+Expected files:
+  Android: android/app/google-services.json
+  iOS: ios/Runner/GoogleService-Info.plist
+```
+
+**Solution:**
+- Download `google-services.json` from Firebase Console (Android app settings)
+- Download `GoogleService-Info.plist` from Firebase Console (iOS app settings)
+- Place files in the correct directories
+- For multi-flavor setup, organize files by flavor
+
+#### 2. Build failed
+
+**Error:**
+```
+❌ Build failed for android
+📝 Error log saved to: .pipo_logs/build_android_dev_20240115_143022.log
+```
+
+**Solution:**
+- Check the error log file in `.pipo_logs/`
+- Common issues:
+  - Flutter SDK not installed or not in PATH
+  - Flavor not configured in `build.gradle`
+  - Missing dependencies in `pubspec.yaml`
+- Run `flutter doctor` to check Flutter installation
+- Try building manually: `flutter build apk --flavor dev`
+
+#### 3. Upload failed
+
+**Error:**
+```
+❌ Upload failed for android
+📝 Error log saved to: .pipo_logs/upload_android_dev_20240115_143525.log
+```
+
+**Solution:**
+- Check Firebase CLI installation: `firebase --version`
+- Verify authentication: `firebase login`
+- Check App ID in `build.yaml` matches Firebase Console
+- Verify you have access to the Firebase project
+- Check network connection
+
+#### 4. Authentication failed
+
+**Error:**
+```
+❌ The authenticated account does not have access to project: my-project-123
+```
+
+**Solution:**
+- Verify the project ID in `build.yaml` is correct
+- Ensure your Google account has access to the Firebase project
+- Try switching to a different account (CLI will offer this option)
+- Check Firebase Console → Project Settings → Users and permissions
+
+#### 5. Wrong number of flavors detected
+
+**Error:**
+```
+Generated 4 configurations but only have 3 flavors
+```
+
+**Solution:**
+- The CLI now reads flavors from `build.gradle`
+- It only includes flavors defined in `productFlavors`
+- Extra clients in `google-services.json` are ignored
+- Re-run `pipo_firebase init` to regenerate configuration
+
+### Error Logs
+
+All errors are automatically logged to `.pipo_logs/`:
+- Build errors: `build_{platform}_{environment}_{timestamp}.log`
+- Upload errors: `upload_{platform}_{environment}_{timestamp}.log`
+- Deployment errors: `deployment_{environment}_{timestamp}.log`
+
+The `.pipo_logs/` directory is automatically added to `.gitignore`.
+
+## 🎨 Advanced Usage
+
+### Custom Build Presets
+
+Define reusable build configurations in `build.yaml`:
+
+```yaml
+presets:
+  quick-test:
+    environment: dev
+    platform: android
+    build_mode: debug
+    upload: false
+    clean: false
+
+  release-candidate:
+    environment: staging
+    build_mode: release
+    upload: true
+    clean: true
+    obfuscate: true
+```
+
+### Version Management
+
+Auto-increment version numbers:
+
+```yaml
+environments:
+  dev:
+    setup:
+      auto_increment: true  # Increments build number (1.0.0+1 → 1.0.0+2)
+```
+
+### Git Integration
+
+Automatic git operations:
+
+```yaml
+environments:
+  production:
+    setup:
+      auto_increment: true  # Increments version
+      # After build, automatically:
+      # 1. Commits version change to pubspec.yaml
+      # 2. Creates git tag (e.g., v1.0.0-production+2)
+      # 3. Commits build.yaml changes
+```
+
+Disable git operations:
+
+```bash
+pipo_firebase deploy production --skip-git-tag
+```
+
+### Release Notes
+
+Automatically generated from git commits:
+
+```bash
+# Generated release notes include:
+# - Commits since last tag
+# - Environment (dev/staging/production)
+# - Build mode (debug/release)
+# - Version number
+```
+
+Format:
+```
+Environment: dev
+Build Mode: release
+Version: 1.0.0+2
+
+Recent Changes:
+- Add user authentication feature
+- Fix image loading bug
+- Update app icon
+- Improve performance
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Inspired by the need to simplify Firebase App Distribution setup
+- Built with [mason_logger](https://pub.dev/packages/mason_logger) for beautiful CLI output
+- Thanks to the Flutter and Firebase communities
+
+## 📞 Support
+
+- 📚 [Documentation](https://pub.dev/packages/pipo_firebase_app_distribution)
+- 🐛 [Issue Tracker](https://github.com/yourusername/pipo_firebase_app_distribution/issues)
+- 💬 [Discussions](https://github.com/yourusername/pipo_firebase_app_distribution/discussions)
+
+## 🗺️ Roadmap
+
+- [x] ~~Build command to execute builds from build.yaml~~
+- [x] ~~Upload command to distribute to Firebase~~
+- [x] ~~Auto-increment version numbers~~
+- [x] ~~Release notes generation from git commits~~
+- [x] ~~Git tagging support~~
+- [x] ~~Multi-account authentication~~
+- [x] ~~Error logging and troubleshooting~~
+- [ ] Support for multiple Firebase projects
+- [ ] CI/CD integration examples
+- [ ] GitHub Actions workflow templates
+- [ ] Support for iOS schemes (similar to Android flavors)
+- [ ] Release notes templates
+- [ ] Slack/Discord notifications
+
+---
+
+Made with ❤️ by the Flutter community
