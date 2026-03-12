@@ -513,6 +513,7 @@ class DeployCommand {
       projectPath: projectPath,
       logger: logger,
       deployLogger: deployLogger,
+      useFvm: buildConfig.project.useFvm,
     );
 
     final buildFormat = platform == 'android'

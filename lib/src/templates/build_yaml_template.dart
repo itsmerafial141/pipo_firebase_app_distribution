@@ -27,6 +27,7 @@ class BuildYamlTemplate {
     buffer.writeln('project:');
     buffer.writeln('  name: "${projectName ?? "My App"}"');
     buffer.writeln('  version: "${projectVersion ?? "1.0.0+1"}"');
+    buffer.writeln('  use_fvm: false  # Set to true if using FVM (Flutter Version Management)');
     buffer.writeln();
 
     // Firebase configuration (from first config)

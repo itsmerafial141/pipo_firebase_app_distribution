@@ -41,16 +41,19 @@ class BuildConfig {
 class ProjectConfig {
   final String name;
   final String version;
+  final bool useFvm;
 
   ProjectConfig({
     required this.name,
     required this.version,
+    this.useFvm = false,
   });
 
   factory ProjectConfig.fromMap(Map<String, dynamic> map) {
     return ProjectConfig(
       name: map['name'] as String,
       version: map['version'] as String,
+      useFvm: map['use_fvm'] as bool? ?? false,
     );
   }
 }

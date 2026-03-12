@@ -60,14 +60,19 @@ class FlutterBuilder {
   final String? projectPath;
   final Logger logger;
   final DeployLogger? deployLogger;
+  final bool useFvm;
 
   FlutterBuilder({
     this.projectPath,
     Logger? logger,
     this.deployLogger,
+    this.useFvm = false,
   }) : logger = logger ?? Logger();
 
   String get _basePath => projectPath ?? Directory.current.path;
+
+  /// Returns the flutter command prefix (with or without fvm)
+  String get _flutter => useFvm ? 'fvm flutter' : 'flutter';
 
   /// Build APK or IPA based on options
   Future<BuildResult> build(BuildOptions options) async {
@@ -149,7 +154,7 @@ class FlutterBuilder {
     deployLogger?.progress('Cleaning project...');
 
     try {
-      final result = await _runStreaming('flutter clean');
+      final result = await _runStreaming('$_flutter clean');
       if (result.exitCode != 0) {
         progress.fail('❌ Clean failed');
         deployLogger?.error('Clean failed (exit code: ${result.exitCode})');
@@ -170,7 +175,7 @@ class FlutterBuilder {
     deployLogger?.progress('Getting dependencies...');
 
     try {
-      final result = await _runStreaming('flutter pub get');
+      final result = await _runStreaming('$_flutter pub get');
       if (result.exitCode != 0) {
         progress.fail('❌ Failed to get dependencies');
         deployLogger?.error('Failed to get dependencies (exit code: ${result.exitCode})');
@@ -198,7 +203,7 @@ class FlutterBuilder {
     try {
       // Prepare build command
       final buildArgs = <String>[
-        'flutter',
+        ...(_flutter.split(' ')),
         'build',
         buildType,
         '--flavor',
@@ -300,7 +305,7 @@ class FlutterBuilder {
     try {
       // Prepare build command
       final buildArgs = <String>[
-        'flutter',
+        ...(_flutter.split(' ')),
         'build',
         'ipa',
         '--flavor',
@@ -456,7 +461,8 @@ class FlutterBuilder {
   /// Check if Flutter is installed
   Future<bool> isFlutterInstalled() async {
     try {
-      final result = await Process.run('flutter', ['--version'],
+      final cmd = _flutter.split(' ');
+      final result = await Process.run(cmd.first, [...cmd.skip(1), '--version'],
           workingDirectory: _basePath, runInShell: true);
       return result.exitCode == 0;
     } catch (e) {
