@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:mason_logger/mason_logger.dart';
 import 'package:path/path.dart' as path;
-import 'package:process_run/shell.dart';
+
+import '../utils/deploy_logger.dart';
 
 /// Flutter build configuration
 class BuildOptions {
@@ -12,6 +14,7 @@ class BuildOptions {
   final String buildFormat; // apk, aab, or ipa
   final bool obfuscate;
   final bool clean;
+  final List<String> extraArgs;
 
   BuildOptions({
     required this.environment,
@@ -20,6 +23,7 @@ class BuildOptions {
     required this.buildFormat,
     this.obfuscate = false,
     this.clean = true,
+    this.extraArgs = const [],
   });
 }
 
@@ -55,15 +59,15 @@ class BuildResult {
 class FlutterBuilder {
   final String? projectPath;
   final Logger logger;
-  late final Shell _shell;
+  final DeployLogger? deployLogger;
 
   FlutterBuilder({
     this.projectPath,
     Logger? logger,
-  }) : logger = logger ?? Logger() {
-    final basePath = projectPath ?? Directory.current.path;
-    _shell = Shell(workingDirectory: basePath);
-  }
+    this.deployLogger,
+  }) : logger = logger ?? Logger();
+
+  String get _basePath => projectPath ?? Directory.current.path;
 
   /// Build APK or IPA based on options
   Future<BuildResult> build(BuildOptions options) async {
@@ -89,6 +93,7 @@ class FlutterBuilder {
       }
     } catch (e) {
       logger.err('Build failed: $e');
+      deployLogger?.error('Build failed: $e');
       return BuildResult(
         success: false,
         error: e.toString(),
@@ -96,14 +101,65 @@ class FlutterBuilder {
     }
   }
 
+  /// Run a command with real-time streaming to DeployLogger
+  Future<_ProcessResult> _runStreaming(String command) async {
+    deployLogger?.command(command);
+
+    final parts = command.split(' ');
+    final process = await Process.start(
+      parts.first,
+      parts.skip(1).toList(),
+      workingDirectory: _basePath,
+      runInShell: true,
+    );
+
+    final outputBuffer = StringBuffer();
+
+    // Stream stdout line by line
+    final stdoutFuture = process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+      outputBuffer.writeln(line);
+      deployLogger?.stdout(line);
+    }).asFuture();
+
+    // Stream stderr line by line
+    final stderrFuture = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+      outputBuffer.writeln(line);
+      deployLogger?.stderr(line);
+    }).asFuture();
+
+    // Wait for streams to complete
+    await Future.wait([stdoutFuture, stderrFuture]);
+    final exitCode = await process.exitCode;
+
+    return _ProcessResult(
+      exitCode: exitCode,
+      output: outputBuffer.toString(),
+    );
+  }
+
   /// Clean Flutter project
   Future<void> _clean() async {
     final progress = logger.progress('🧹 Cleaning project');
+    deployLogger?.progress('Cleaning project...');
+
     try {
-      await _shell.run('flutter clean');
+      final result = await _runStreaming('flutter clean');
+      if (result.exitCode != 0) {
+        progress.fail('❌ Clean failed');
+        deployLogger?.error('Clean failed (exit code: ${result.exitCode})');
+        throw ProcessException('flutter', ['clean'], 'Clean failed', result.exitCode);
+      }
       progress.complete('✅ Project cleaned');
+      deployLogger?.success('Project cleaned');
     } catch (e) {
       progress.fail('❌ Clean failed');
+      deployLogger?.error('Clean failed: $e');
       rethrow;
     }
   }
@@ -111,23 +167,33 @@ class FlutterBuilder {
   /// Get Flutter dependencies
   Future<void> _getDependencies() async {
     final progress = logger.progress('📦 Getting dependencies');
+    deployLogger?.progress('Getting dependencies...');
+
     try {
-      await _shell.run('flutter pub get');
+      final result = await _runStreaming('flutter pub get');
+      if (result.exitCode != 0) {
+        progress.fail('❌ Failed to get dependencies');
+        deployLogger?.error('Failed to get dependencies (exit code: ${result.exitCode})');
+        throw ProcessException('flutter', ['pub', 'get'], 'pub get failed', result.exitCode);
+      }
       progress.complete('✅ Dependencies fetched');
+      deployLogger?.success('Dependencies fetched');
     } catch (e) {
       progress.fail('❌ Failed to get dependencies');
+      deployLogger?.error('Failed to get dependencies: $e');
       rethrow;
     }
   }
 
   /// Build Android APK or AAB
   Future<BuildResult> _buildAndroid(BuildOptions options) async {
-    final basePath = projectPath ?? Directory.current.path;
     final buildType = options.buildFormat == 'aab' ? 'appbundle' : 'apk';
     final buildProgress = logger.progress(
       '🔨 Building ${buildType.toUpperCase()} for ${options.environment} (${options.buildMode})',
     );
-    final outputBuffer = StringBuffer();
+    deployLogger?.progress(
+      'Building ${buildType.toUpperCase()} for ${options.environment} (${options.buildMode})...',
+    );
 
     try {
       // Prepare build command
@@ -142,7 +208,7 @@ class FlutterBuilder {
 
       // Add obfuscation flags for release builds
       if (options.buildMode == 'release' && options.obfuscate) {
-        final symbolsDir = path.join(basePath, 'build', 'symbols', options.environment);
+        final symbolsDir = path.join(_basePath, 'build', 'symbols', options.environment);
         await Directory(symbolsDir).create(recursive: true);
 
         buildArgs.addAll([
@@ -151,24 +217,32 @@ class FlutterBuilder {
         ]);
 
         logger.detail('🔒 Obfuscation enabled (symbols: $symbolsDir)');
+        deployLogger?.info('Obfuscation enabled (symbols: $symbolsDir)');
       }
 
-      // Run build and capture output
-      final results = await _shell.run(buildArgs.join(' '));
-      for (final result in results) {
-        if (result.stdout.isNotEmpty) {
-          outputBuffer.writeln('STDOUT:');
-          outputBuffer.writeln(result.stdout);
-        }
-        if (result.stderr.isNotEmpty) {
-          outputBuffer.writeln('STDERR:');
-          outputBuffer.writeln(result.stderr);
-        }
+      // Add custom extra args
+      if (options.extraArgs.isNotEmpty) {
+        buildArgs.addAll(options.extraArgs);
+        logger.detail('📎 Extra args: ${options.extraArgs.join(" ")}');
+        deployLogger?.info('Extra args: ${options.extraArgs.join(" ")}');
+      }
+
+      // Run build with real-time streaming
+      final result = await _runStreaming(buildArgs.join(' '));
+
+      if (result.exitCode != 0) {
+        buildProgress.fail('❌ Build failed');
+        deployLogger?.error('Build failed (exit code: ${result.exitCode})');
+        return BuildResult(
+          success: false,
+          error: 'Build failed with exit code ${result.exitCode}',
+          buildOutput: result.output,
+        );
       }
 
       // Find built artifact
       final artifactPath = _findAndroidArtifact(
-        basePath: basePath,
+        basePath: _basePath,
         environment: options.environment,
         buildMode: options.buildMode,
         buildFormat: options.buildFormat,
@@ -176,10 +250,11 @@ class FlutterBuilder {
 
       if (artifactPath == null) {
         buildProgress.fail('❌ Build artifact not found');
+        deployLogger?.error('Build artifact not found');
         return BuildResult(
           success: false,
           error: 'Build artifact not found',
-          buildOutput: outputBuffer.toString(),
+          buildOutput: result.output,
         );
       }
 
@@ -192,31 +267,35 @@ class FlutterBuilder {
       logger.info('📁 Location: $artifactPath');
       logger.info('📏 Size: ${_formatSize(artifactSize)}');
 
+      deployLogger?.success('Build completed successfully');
+      deployLogger?.info('Artifact: ${path.basename(artifactPath)}');
+      deployLogger?.info('Location: $artifactPath');
+      deployLogger?.info('Size: ${_formatSize(artifactSize)}');
+
       return BuildResult(
         success: true,
         artifactPath: artifactPath,
         artifactSize: artifactSize,
-        buildOutput: outputBuffer.toString(),
+        buildOutput: result.output,
       );
     } catch (e) {
       buildProgress.fail('❌ Build failed');
-      outputBuffer.writeln('ERROR:');
-      outputBuffer.writeln(e.toString());
+      deployLogger?.error('Build crashed: $e');
       return BuildResult(
         success: false,
         error: e.toString(),
-        buildOutput: outputBuffer.toString(),
       );
     }
   }
 
   /// Build iOS IPA
   Future<BuildResult> _buildIos(BuildOptions options) async {
-    final basePath = projectPath ?? Directory.current.path;
     final buildProgress = logger.progress(
       '🔨 Building IPA for ${options.environment} (${options.buildMode})',
     );
-    final outputBuffer = StringBuffer();
+    deployLogger?.progress(
+      'Building IPA for ${options.environment} (${options.buildMode})...',
+    );
 
     try {
       // Prepare build command
@@ -231,7 +310,7 @@ class FlutterBuilder {
 
       // Add obfuscation flags for release builds
       if (options.buildMode == 'release' && options.obfuscate) {
-        final symbolsDir = path.join(basePath, 'build', 'symbols', options.environment);
+        final symbolsDir = path.join(_basePath, 'build', 'symbols', options.environment);
         await Directory(symbolsDir).create(recursive: true);
 
         buildArgs.addAll([
@@ -240,33 +319,42 @@ class FlutterBuilder {
         ]);
 
         logger.detail('🔒 Obfuscation enabled (symbols: $symbolsDir)');
+        deployLogger?.info('Obfuscation enabled (symbols: $symbolsDir)');
       }
 
-      // Run build and capture output
-      final results = await _shell.run(buildArgs.join(' '));
-      for (final result in results) {
-        if (result.stdout.isNotEmpty) {
-          outputBuffer.writeln('STDOUT:');
-          outputBuffer.writeln(result.stdout);
-        }
-        if (result.stderr.isNotEmpty) {
-          outputBuffer.writeln('STDERR:');
-          outputBuffer.writeln(result.stderr);
-        }
+      // Add custom extra args
+      if (options.extraArgs.isNotEmpty) {
+        buildArgs.addAll(options.extraArgs);
+        logger.detail('📎 Extra args: ${options.extraArgs.join(" ")}');
+        deployLogger?.info('Extra args: ${options.extraArgs.join(" ")}');
+      }
+
+      // Run build with real-time streaming
+      final result = await _runStreaming(buildArgs.join(' '));
+
+      if (result.exitCode != 0) {
+        buildProgress.fail('❌ Build failed');
+        deployLogger?.error('Build failed (exit code: ${result.exitCode})');
+        return BuildResult(
+          success: false,
+          error: 'Build failed with exit code ${result.exitCode}',
+          buildOutput: result.output,
+        );
       }
 
       // Find built artifact
       final artifactPath = _findIosArtifact(
-        basePath: basePath,
+        basePath: _basePath,
         environment: options.environment,
       );
 
       if (artifactPath == null) {
         buildProgress.fail('❌ Build artifact not found');
+        deployLogger?.error('Build artifact not found');
         return BuildResult(
           success: false,
           error: 'Build artifact not found',
-          buildOutput: outputBuffer.toString(),
+          buildOutput: result.output,
         );
       }
 
@@ -279,20 +367,23 @@ class FlutterBuilder {
       logger.info('📁 Location: $artifactPath');
       logger.info('📏 Size: ${_formatSize(artifactSize)}');
 
+      deployLogger?.success('Build completed successfully');
+      deployLogger?.info('Artifact: ${path.basename(artifactPath)}');
+      deployLogger?.info('Location: $artifactPath');
+      deployLogger?.info('Size: ${_formatSize(artifactSize)}');
+
       return BuildResult(
         success: true,
         artifactPath: artifactPath,
         artifactSize: artifactSize,
-        buildOutput: outputBuffer.toString(),
+        buildOutput: result.output,
       );
     } catch (e) {
       buildProgress.fail('❌ Build failed');
-      outputBuffer.writeln('ERROR:');
-      outputBuffer.writeln(e.toString());
+      deployLogger?.error('Build crashed: $e');
       return BuildResult(
         success: false,
         error: e.toString(),
-        buildOutput: outputBuffer.toString(),
       );
     }
   }
@@ -365,10 +456,19 @@ class FlutterBuilder {
   /// Check if Flutter is installed
   Future<bool> isFlutterInstalled() async {
     try {
-      await _shell.run('flutter --version');
-      return true;
+      final result = await Process.run('flutter', ['--version'],
+          workingDirectory: _basePath, runInShell: true);
+      return result.exitCode == 0;
     } catch (e) {
       return false;
     }
   }
+}
+
+/// Internal process result holder
+class _ProcessResult {
+  final int exitCode;
+  final String output;
+
+  _ProcessResult({required this.exitCode, required this.output});
 }

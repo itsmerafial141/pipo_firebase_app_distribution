@@ -16,6 +16,8 @@ dependencies:
   cli_util: ^0.4.1
   process_run: ^1.2.0
   mason_logger: ^0.2.16
+  http: ^1.2.0
+  pointycastle: ^3.9.1
 
 dev_dependencies:
   lints: ^5.0.0

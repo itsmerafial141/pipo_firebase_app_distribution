@@ -16,9 +16,11 @@ class BuildYamlTemplate {
     buffer.writeln('# https://pub.dev/packages/pipo_firebase_app_distribution');
     buffer.writeln();
     buffer.writeln('# Authentication:');
-    buffer.writeln('# When you run deploy for the first time, you\'ll be prompted to login to Firebase.');
-    buffer.writeln('# Your token will be saved to .firebase-token file (already added to .gitignore)');
-    buffer.writeln('# You won\'t need to login again unless the token expires.');
+    buffer.writeln('# Place your Google Cloud service account JSON key file as');
+    buffer.writeln('# .firebase-credentials.json in the project root, or set the');
+    buffer.writeln('# credentials_file path under the firebase section below, or set');
+    buffer.writeln('# the GOOGLE_APPLICATION_CREDENTIALS environment variable.');
+    buffer.writeln('# The credentials file is auto-added to .gitignore.');
     buffer.writeln();
 
     // Project info
@@ -34,6 +36,7 @@ class BuildYamlTemplate {
       buffer.writeln('  project_id: "${firstConfig.projectId}"');
       buffer.writeln('  project_number: "${firstConfig.projectNumber}"');
       buffer.writeln('  timeout: 600');
+      buffer.writeln('  credentials_file: ".firebase-credentials.json"  # Path to service account JSON key');
       buffer.writeln();
     }
 
@@ -85,9 +88,10 @@ class BuildYamlTemplate {
         buffer.writeln('    ios_bundle_id: "${iosConfig.bundleId}"');
       }
 
-      // Distribution group
+      // Distribution groups
       final group = _getDefaultGroup(env);
-      buffer.writeln('    group: "$group"');
+      buffer.writeln('    groups:');
+      buffer.writeln('      - "$group"');
       buffer.writeln();
 
       // Setup configuration
@@ -97,6 +101,9 @@ class BuildYamlTemplate {
       buffer.writeln('      obfuscate: ${_getDefaultObfuscate(env)}');
       buffer.writeln('      auto_increment: ${_getDefaultAutoIncrement(env)}');
       buffer.writeln('      clean: true');
+      buffer.writeln('      extra_args: []  # Custom flutter build args for both platforms');
+      buffer.writeln('      android_extra_args: []  # Android-only args, e.g. ["--split-per-abi"]');
+      buffer.writeln('      ios_extra_args: []  # iOS-only args, e.g. ["--export-method ad-hoc"]');
       buffer.writeln();
     }
 

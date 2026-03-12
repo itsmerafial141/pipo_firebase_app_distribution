@@ -59,11 +59,13 @@ class FirebaseConfigInfo {
   final String projectId;
   final String projectNumber;
   final int timeout;
+  final String? credentialsFile;
 
   FirebaseConfigInfo({
     required this.projectId,
     required this.projectNumber,
     required this.timeout,
+    this.credentialsFile,
   });
 
   factory FirebaseConfigInfo.fromMap(Map<String, dynamic> map) {
@@ -71,6 +73,7 @@ class FirebaseConfigInfo {
       projectId: map['project_id'] as String,
       projectNumber: map['project_number'] as String,
       timeout: map['timeout'] as int,
+      credentialsFile: map['credentials_file'] as String?,
     );
   }
 }
@@ -80,7 +83,7 @@ class EnvironmentConfig {
   final String? androidBundleId;
   final String? iosAppId;
   final String? iosBundleId;
-  final String? group;
+  final List<String> groups;
   final SetupConfig setup;
 
   EnvironmentConfig({
@@ -88,17 +91,34 @@ class EnvironmentConfig {
     this.androidBundleId,
     this.iosAppId,
     this.iosBundleId,
-    this.group,
+    this.groups = const [],
     required this.setup,
   });
 
+  /// Comma-separated groups string for the uploader API
+  String? get groupsString => groups.isEmpty ? null : groups.join(',');
+
   factory EnvironmentConfig.fromMap(Map<String, dynamic> map) {
+    // Support both "groups" and "group" keys, each as List or String
+    List<String> groups;
+    if (map['groups'] is List) {
+      groups = (map['groups'] as List).cast<String>();
+    } else if (map['groups'] is String) {
+      groups = [map['groups'] as String];
+    } else if (map['group'] is List) {
+      groups = (map['group'] as List).cast<String>();
+    } else if (map['group'] is String) {
+      groups = [map['group'] as String];
+    } else {
+      groups = [];
+    }
+
     return EnvironmentConfig(
       androidAppId: map['android_app_id'] as String?,
       androidBundleId: map['android_bundle_id'] as String?,
       iosAppId: map['ios_app_id'] as String?,
       iosBundleId: map['ios_bundle_id'] as String?,
-      group: map['group'] as String?,
+      groups: groups,
       setup: SetupConfig.fromMap(map['setup'] as Map<String, dynamic>),
     );
   }
@@ -110,6 +130,9 @@ class SetupConfig {
   final bool obfuscate;
   final bool autoIncrement;
   final bool clean;
+  final List<String> extraArgs;
+  final List<String> androidExtraArgs;
+  final List<String> iosExtraArgs;
 
   SetupConfig({
     required this.buildMode,
@@ -117,15 +140,47 @@ class SetupConfig {
     required this.obfuscate,
     required this.autoIncrement,
     required this.clean,
+    this.extraArgs = const [],
+    this.androidExtraArgs = const [],
+    this.iosExtraArgs = const [],
   });
 
+  /// Get extra args for a specific platform (shared + platform-specific)
+  List<String> extraArgsForPlatform(String platform) {
+    final args = <String>[...extraArgs];
+    if (platform == 'android') {
+      args.addAll(androidExtraArgs);
+    } else if (platform == 'ios') {
+      args.addAll(iosExtraArgs);
+    }
+    return args;
+  }
+
   factory SetupConfig.fromMap(Map<String, dynamic> map) {
+    List<String> extraArgs = [];
+    if (map['extra_args'] is List) {
+      extraArgs = (map['extra_args'] as List).cast<String>();
+    }
+
+    List<String> androidExtraArgs = [];
+    if (map['android_extra_args'] is List) {
+      androidExtraArgs = (map['android_extra_args'] as List).cast<String>();
+    }
+
+    List<String> iosExtraArgs = [];
+    if (map['ios_extra_args'] is List) {
+      iosExtraArgs = (map['ios_extra_args'] as List).cast<String>();
+    }
+
     return SetupConfig(
       buildMode: map['build_mode'] as String,
       upload: map['upload'] as bool,
       obfuscate: map['obfuscate'] as bool,
       autoIncrement: map['auto_increment'] as bool,
       clean: map['clean'] as bool,
+      extraArgs: extraArgs,
+      androidExtraArgs: androidExtraArgs,
+      iosExtraArgs: iosExtraArgs,
     );
   }
 }

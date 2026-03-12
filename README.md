@@ -27,15 +27,15 @@ A powerful Dart CLI tool that automatically generates build configuration from y
   - Upload to Firebase App Distribution
   - Create git tags automatically
 
-- 🔐 **Smart Authentication**: Flexible Firebase authentication:
-  - Auto-login with browser
-  - Manual token input
-  - Multi-account support with account switching
-  - Persistent token storage
+- 🔐 **Service Account Authentication**: Secure, CLI-free authentication:
+  - Google Cloud service account JSON key file
+  - No Firebase CLI installation required
+  - Supports `GOOGLE_APPLICATION_CREDENTIALS` environment variable
+  - CI/CD ready (Jenkins, GitHub Actions, etc.)
 
 - 📊 **Error Logging**: Comprehensive error logging:
   - Build errors saved to `.pipo_logs/`
-  - Upload errors with Firebase CLI output
+  - Upload errors with API response details
   - Auto-gitignore for sensitive files
 
 - 🎯 **Zero Configuration**: Just run `pipo_firebase init` and you're ready to go!
@@ -87,11 +87,15 @@ dart run pipo_firebase deploy dev
 ### 1. Prerequisites
 
 - Flutter SDK installed and configured
-- Firebase CLI installed (`npm install -g firebase-tools`)
 - Firebase project created with App Distribution enabled
 - Firebase configuration files in your project:
   - `google-services.json` for Android
   - `GoogleService-Info.plist` for iOS
+- Google Cloud service account JSON key file (for upload)
+  - Go to [Google Cloud Console](https://console.cloud.google.com) → IAM & Admin → Service Accounts
+  - Create a service account with **Firebase App Distribution Admin** role
+  - Download the JSON key file
+  - Place it as `.firebase-credentials.json` in your project root (auto-gitignored)
 
 ### 2. Initialize Configuration
 
@@ -171,6 +175,7 @@ firebase:
   project_id: "my-project-123"
   project_number: "123456789"
   timeout: 600
+  credentials_file: ".firebase-credentials.json"  # Path to service account JSON key
 
 # Environment configurations
 environments:
@@ -534,103 +539,58 @@ When you run `pipo_firebase deploy dev`, the following happens:
 
 ## 🔐 Firebase Authentication
 
-The CLI supports multiple authentication methods:
+The CLI uses **Google Cloud service account** credentials to authenticate with the Firebase App Distribution API directly — no Firebase CLI installation required.
 
-### 1. Auto-Login (Recommended)
+### Setting Up Credentials
 
-When you first run deploy, the CLI will automatically open your browser for authentication:
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → **IAM & Admin** → **Service Accounts**
+2. Create a service account (or use an existing one)
+3. Grant the **Firebase App Distribution Admin** role
+4. Create a JSON key and download it
+5. Place it in your project
 
-```bash
-╔══════════════════════════════════════════════════════════════╗
-║              🔐 Firebase Authentication Required              ║
-╚══════════════════════════════════════════════════════════════╝
+### Credentials Resolution Order
 
-You need to authenticate with Firebase to access project:
-   Project ID: my-project-123
+The tool looks for credentials in this order:
 
-Choose authentication method:
-   1. Auto-login (Browser will open automatically)
-   2. Manual login (You open browser manually and paste token)
-   3. Skip (Continue without upload)
+1. **`credentials_file` in `build.yaml`** — explicit path under the `firebase` section:
+   ```yaml
+   firebase:
+     credentials_file: "path/to/service-account.json"
+   ```
 
-Enter your choice (1/2/3): 1
+2. **`GOOGLE_APPLICATION_CREDENTIALS` environment variable** — standard Google Cloud convention:
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+   pipo_firebase deploy dev
+   ```
 
-🌐 Opening browser for authentication...
+3. **`.firebase-credentials.json` in project root** — default convention (auto-gitignored)
 
-✅ Successfully authenticated with Firebase!
+### CI/CD Integration (Jenkins)
 
-🔍 Verifying access to project my-project-123...
-✅ Access verified!
+For Jenkins or other CI/CD systems, set the credentials as an environment variable or provide the file path:
 
-🔑 Generating authentication token for persistent storage...
-   This will open a browser window
-
-✅ Token generated successfully!
-✅ Token saved to .firebase-token
-✨ You won't need to login again for this project!
+```groovy
+// Jenkinsfile example
+environment {
+    GOOGLE_APPLICATION_CREDENTIALS = credentials('firebase-service-account')
+}
+stages {
+    stage('Deploy') {
+        steps {
+            sh 'pipo_firebase deploy staging --platform android'
+        }
+    }
+}
 ```
 
-### 2. Multi-Account Support
+### Security Notes
 
-If the authenticated account doesn't have access to the project, the CLI will offer to switch accounts:
-
-```bash
-❌ The authenticated account does not have access to project: my-project-123
-
-The project is not available in your current Firebase account.
-
-Would you like to switch to a different Google account?
-   1. Yes, open browser to login with different account
-   2. No, skip authentication
-
-Enter your choice (1/2): 1
-
-🔄 Switching Firebase account...
-
-✅ Logged out from current account
-
-🌐 Opening browser to login with different account...
-   Please select the Google account that has access to:
-   Project: my-project-123
-
-✅ Successfully logged in!
-
-🔍 Verifying access to project my-project-123...
-✅ Access verified!
-```
-
-### 3. Manual Login
-
-If auto-login fails, you can manually provide a token:
-
-```bash
-╔══════════════════════════════════════════════════════════════╗
-║                    📝 Manual Login Steps                      ║
-╚══════════════════════════════════════════════════════════════╝
-
-Please follow these steps:
-
-1. Open this URL in your browser:
-   https://console.firebase.google.com/project/my-project-123/overview
-
-2. Login with your Google account that has access to this project
-
-3. Open terminal and run this command:
-   firebase login:ci
-
-4. Copy the token from the output
-
-5. Come back here and paste the token
-
-Paste your Firebase token here (or press Enter to skip):
-```
-
-### 4. Token Storage
-
-The CLI stores your Firebase token in `.firebase-token` for future use:
-- Token is auto-gitignored
-- Token is validated before each use
-- Expired tokens are automatically refreshed
+- The `.firebase-credentials.json` file is automatically added to `.gitignore`
+- Never commit service account key files to version control
+- For CI/CD, use secret management (Jenkins credentials, GitHub Secrets, etc.)
+- Service account tokens are short-lived (1 hour) and auto-refreshed
 
 ## 🏗️ Project Structure
 
@@ -663,7 +623,7 @@ my_flutter_app/
 │
 ├── pubspec.yaml
 ├── build.yaml                                     # Generated by pipo_firebase init
-├── .firebase-token                                # Auto-generated (gitignored)
+├── .firebase-credentials.json                     # Service account key (gitignored)
 └── .pipo_logs/                                    # Error logs (gitignored)
 ```
 
@@ -830,24 +790,23 @@ Expected files:
 ```
 
 **Solution:**
-- Check Firebase CLI installation: `firebase --version`
-- Verify authentication: `firebase login`
-- Check App ID in `build.yaml` matches Firebase Console
-- Verify you have access to the Firebase project
-- Check network connection
+- Check that your service account credentials file exists and is valid
+- Verify the service account has the **Firebase App Distribution Admin** role
+- Check App ID and project number in `build.yaml` match Firebase Console
+- Verify network connection
 
 #### 4. Authentication failed
 
 **Error:**
 ```
-❌ The authenticated account does not have access to project: my-project-123
+No service account credentials found.
 ```
 
 **Solution:**
-- Verify the project ID in `build.yaml` is correct
-- Ensure your Google account has access to the Firebase project
-- Try switching to a different account (CLI will offer this option)
-- Check Firebase Console → Project Settings → Users and permissions
+- Place `.firebase-credentials.json` in project root, or
+- Set `credentials_file` in `build.yaml` under `firebase` section, or
+- Set `GOOGLE_APPLICATION_CREDENTIALS` environment variable
+- Ensure the JSON file is a valid Google Cloud service account key (type: `service_account`)
 
 #### 5. Wrong number of flavors detected
 
@@ -984,10 +943,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] ~~Auto-increment version numbers~~
 - [x] ~~Release notes generation from git commits~~
 - [x] ~~Git tagging support~~
-- [x] ~~Multi-account authentication~~
+- [x] ~~Service account API authentication (no Firebase CLI required)~~
 - [x] ~~Error logging and troubleshooting~~
+- [x] ~~CI/CD ready (Jenkins, GitHub Actions)~~
 - [ ] Support for multiple Firebase projects
-- [ ] CI/CD integration examples
 - [ ] GitHub Actions workflow templates
 - [ ] Support for iOS schemes (similar to Android flavors)
 - [ ] Release notes templates

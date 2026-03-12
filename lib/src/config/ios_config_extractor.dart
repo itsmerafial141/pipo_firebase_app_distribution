@@ -26,11 +26,28 @@ class IosConfigExtractor {
         path.join(basePath, 'ios', 'Runner', 'Firebase', flavor, 'GoogleService-Info.plist'),
     ];
 
-    // Also search for flavor-specific configs in Firebase directory
+    // Search for flavor-specific configs in Firebase directory
     final firebaseDir = Directory(path.join(basePath, 'ios', 'Runner', 'Firebase'));
     if (await firebaseDir.exists()) {
       await for (final entity in firebaseDir.list()) {
         if (entity is Directory) {
+          final configFile = path.join(entity.path, 'GoogleService-Info.plist');
+          if (!searchPaths.contains(configFile)) {
+            searchPaths.add(configFile);
+          }
+        }
+      }
+    }
+
+    // Search for flavor-specific configs directly under Runner directory
+    // (e.g., ios/Runner/dev/, ios/Runner/staging/, ios/Runner/production/)
+    final runnerDir = Directory(path.join(basePath, 'ios', 'Runner'));
+    if (await runnerDir.exists()) {
+      final skipDirs = {'Firebase', 'Assets.xcassets', 'Base.lproj'};
+      await for (final entity in runnerDir.list()) {
+        if (entity is Directory) {
+          final dirName = path.basename(entity.path);
+          if (skipDirs.contains(dirName) || dirName.startsWith('.')) continue;
           final configFile = path.join(entity.path, 'GoogleService-Info.plist');
           if (!searchPaths.contains(configFile)) {
             searchPaths.add(configFile);
@@ -49,6 +66,14 @@ class IosConfigExtractor {
         try {
           final config = await _parseGoogleServiceInfoPlist(file, basePath);
           if (config != null) {
+            // Deduplicate by appId — prefer config with environment detected from path
+            final existingIndex = configs.indexWhere((c) => c.appId == config.appId);
+            if (existingIndex >= 0) {
+              if (config.environment != null && configs[existingIndex].environment == null) {
+                configs[existingIndex] = config;
+              }
+              continue;
+            }
             configs.add(config);
           }
         } catch (e) {
@@ -96,6 +121,19 @@ class IosConfigExtractor {
       final firebaseIndex = parts.indexOf('Firebase');
       if (firebaseIndex >= 0 && firebaseIndex + 1 < parts.length) {
         environment = parts[firebaseIndex + 1];
+      }
+    }
+
+    // Check if in Runner/{env}/ directory (e.g., ios/Runner/dev/GoogleService-Info.plist)
+    if (environment == null && relativePath.contains('Runner/')) {
+      final parts = relativePath.split('/');
+      final runnerIndex = parts.indexOf('Runner');
+      if (runnerIndex >= 0 && runnerIndex + 1 < parts.length) {
+        final candidate = parts[runnerIndex + 1];
+        // Only treat as environment if it's not the plist file itself
+        if (candidate != 'GoogleService-Info.plist' && candidate != 'Firebase') {
+          environment = candidate;
+        }
       }
     }
 

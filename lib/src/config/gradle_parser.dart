@@ -48,17 +48,9 @@ class GradleParser {
     // Remove multi-line comments
     final noComments = cleanedContent.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
 
-    // Find productFlavors block
-    final productFlavorsRegex = RegExp(
-      r'productFlavors\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}',
-      multiLine: true,
-      dotAll: true,
-    );
-
-    final match = productFlavorsRegex.firstMatch(noComments);
-    if (match == null) return flavors;
-
-    final productFlavorsBlock = match.group(1) ?? '';
+    // Find productFlavors block using brace-counting
+    final productFlavorsBlock = _extractBlock(noComments, 'productFlavors');
+    if (productFlavorsBlock == null) return flavors;
 
     // Find flavor names using simple pattern
     // Pattern 1: flavorName { ... }
@@ -108,29 +100,18 @@ class GradleParser {
 
   /// Parse application ID for a specific flavor
   static String? _parseApplicationIdForFlavor(String content, String flavor) {
-    // Build regex pattern for finding the flavor block
-    // This handles both: flavorName { } and create("flavorName") { }
-    final pattern = '(?:$flavor\\s*\\{|create\\s*\\(\\s*(?:"$flavor"|\'$flavor\')\\s*\\)\\s*\\{)([^}]*(?:\\{[^}]*\\}[^}]*)*)\\}';
-    final flavorBlockRegex = RegExp(
-      pattern,
-      multiLine: true,
-      dotAll: true,
-    );
-
-    final match = flavorBlockRegex.firstMatch(content);
-    if (match == null) return null;
-
-    final flavorBlock = match.group(1) ?? '';
+    final flavorBlock = _extractBlock(content, flavor);
+    if (flavorBlock == null) return null;
 
     // Find applicationId
-    final appIdRegex = RegExp(r'applicationId\s*[=:]\s*(?:"([^"]+)|' r"'([^']+)')");
+    final appIdRegex = RegExp(r'applicationId\s+(?:[=:]\s*)?(?:"([^"]+)"|' r"'([^']+)')");
     final appIdMatch = appIdRegex.firstMatch(flavorBlock);
     if (appIdMatch != null) {
       return appIdMatch.group(1) ?? appIdMatch.group(2);
     }
 
     // If not found, look for applicationIdSuffix
-    final appIdSuffixRegex = RegExp(r'applicationIdSuffix\s*[=:]\s*(?:"([^"]+)|' r"'([^']+)')");
+    final appIdSuffixRegex = RegExp(r'applicationIdSuffix\s+(?:[=:]\s*)?(?:"([^"]+)"|' r"'([^']+)')");
     final appIdSuffixMatch = appIdSuffixRegex.firstMatch(flavorBlock);
     if (appIdSuffixMatch != null) {
       final suffix = appIdSuffixMatch.group(1) ?? appIdSuffixMatch.group(2);
@@ -146,20 +127,41 @@ class GradleParser {
 
   /// Parse default application ID from defaultConfig
   static String? _parseDefaultApplicationId(String content) {
-    final defaultConfigRegex = RegExp(
-      r'defaultConfig\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}',
-      multiLine: true,
-      dotAll: true,
-    );
+    final defaultConfigBlock = _extractBlock(content, 'defaultConfig');
+    if (defaultConfigBlock == null) return null;
 
-    final match = defaultConfigRegex.firstMatch(content);
-    if (match == null) return null;
-
-    final defaultConfigBlock = match.group(1) ?? '';
-
-    final appIdRegex = RegExp(r'applicationId\s*[=:]\s*(?:"([^"]+)|' r"'([^']+)')");
+    final appIdRegex = RegExp(r'applicationId\s+(?:[=:]\s*)?(?:"([^"]+)"|' r"'([^']+)')");
     final appIdMatch = appIdRegex.firstMatch(defaultConfigBlock);
 
     return appIdMatch?.group(1) ?? appIdMatch?.group(2);
+  }
+
+  /// Extract the content of a named block using brace-counting.
+  /// Given `blockName { ... }`, returns the content between the braces.
+  static String? _extractBlock(String content, String blockName) {
+    final startRegex = RegExp(
+      '(?:^|\\s)$blockName\\s*\\{',
+      multiLine: true,
+    );
+    final match = startRegex.firstMatch(content);
+    if (match == null) return null;
+
+    // Find the opening brace position
+    final openBrace = content.indexOf('{', match.start);
+    if (openBrace < 0) return null;
+
+    var depth = 1;
+    var i = openBrace + 1;
+    while (i < content.length && depth > 0) {
+      if (content[i] == '{') {
+        depth++;
+      } else if (content[i] == '}') {
+        depth--;
+      }
+      if (depth > 0) i++;
+    }
+
+    if (depth != 0) return null;
+    return content.substring(openBrace + 1, i);
   }
 }

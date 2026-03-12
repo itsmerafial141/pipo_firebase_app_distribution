@@ -10,7 +10,7 @@ import 'package:pipo_firebase_app_distribution/src/commands/init_command.dart';
 const String version = '0.0.1';
 
 void main(List<String> arguments) async {
-  final parser = ArgParser()
+  final parser = ArgParser(allowTrailingOptions: false)
     ..addFlag(
       'help',
       abbr: 'h',
@@ -27,31 +27,37 @@ void main(List<String> arguments) async {
   final logger = Logger();
 
   try {
-    final results = parser.parse(arguments);
+    // Check for top-level flags only if the first argument is a flag
+    if (arguments.isNotEmpty && arguments.first.startsWith('-')) {
+      final results = parser.parse(arguments);
 
-    // Handle --help flag
-    if (results['help'] as bool) {
+      if (results['help'] as bool) {
+        _printUsage(parser);
+        exit(0);
+      }
+
+      if (results['version'] as bool) {
+        logger.info('pipo_firebase_app_distribution version $version');
+        exit(0);
+      }
+
+      // If we get here, unknown flag
+      logger.err('❌ Unknown option: ${arguments.first}');
+      logger.info('');
       _printUsage(parser);
-      exit(0);
+      exit(1);
     }
 
-    // Handle --version flag
-    if (results['version'] as bool) {
-      logger.info('pipo_firebase_app_distribution version $version');
-      exit(0);
-    }
-
-    // Get command
-    final commandArgs = results.rest;
-    if (commandArgs.isEmpty) {
+    // Get command from arguments directly (don't parse sub-command flags)
+    if (arguments.isEmpty) {
       logger.err('❌ No command specified.');
       logger.info('');
       _printUsage(parser);
       exit(1);
     }
 
-    final command = commandArgs.first;
-    final commandArguments = commandArgs.skip(1).toList();
+    final command = arguments.first;
+    final commandArguments = arguments.skip(1).toList();
 
     // Execute command
     switch (command) {
@@ -261,9 +267,11 @@ Configuration:
 
 Requirements:
   - Flutter SDK installed
-  - Firebase CLI installed (for upload)
   - build.yaml exists in project root
-  - Firebase configuration files present
+  - Service account credentials (for upload):
+    .firebase-credentials.json in project root, or
+    credentials_file in build.yaml, or
+    GOOGLE_APPLICATION_CREDENTIALS env var
 
 For more information, visit:
 https://pub.dev/packages/pipo_firebase_app_distribution

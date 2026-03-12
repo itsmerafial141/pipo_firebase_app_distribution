@@ -53,7 +53,8 @@ The CLI has two commands routed via a switch in `bin/pipo_firebase_app_distribut
 Key participants:
 - **BuildYamlParser**: Parses `build.yaml` into `BuildConfig` (the central config model with nested types: `EnvironmentConfig`, `SetupConfig`, `PlatformsConfig`, etc.)
 - **FlutterBuilder**: Shells out to `flutter build apk/ipa` with flavor and build mode args. Returns `BuildResult` with artifact path.
-- **FirebaseUploader**: Shells out to `firebase appdistribution:distribute`. Handles token loading from `.firebase-token` file or `FIREBASE_TOKEN` env var. Returns `UploadResult`.
+- **FirebaseAuth** (`auth/`): Handles service account JWT creation (RSA-SHA256 via `pointycastle`), exchanges for OAuth2 access token. Credentials resolved from: `build.yaml` `credentials_file` → `GOOGLE_APPLICATION_CREDENTIALS` env var → `.firebase-credentials.json` in project root.
+- **FirebaseUploader**: Calls Firebase App Distribution REST API directly (upload binary → update release notes → distribute to groups). No Firebase CLI required. Returns `UploadResult`.
 - **VersionManager**: Reads/writes `pubspec.yaml` to increment the build number.
 - **GitHelper**: Creates tags (`appdist-{env}-{version}`), generates release notes from commits since last tag, commits version bumps, and pushes.
 - **ErrorLogger**: Writes error logs to `.pipo_logs/` directory.
@@ -61,7 +62,7 @@ Key participants:
 ### Data model hierarchy (`build_config.dart`)
 `BuildConfig` is the root model parsed from `build.yaml`:
 - `ProjectConfig` (name, version)
-- `FirebaseConfigInfo` (projectId, projectNumber, timeout)
+- `FirebaseConfigInfo` (projectId, projectNumber, timeout, credentialsFile)
 - `Map<String, EnvironmentConfig>` — per-environment settings, each containing app IDs per platform, distribution group, and `SetupConfig` (buildMode, upload, obfuscate, autoIncrement, clean)
 - `PlatformsConfig` → `AndroidPlatformConfig` (buildFormat: apk/aab) + `IosPlatformConfig` (exportMethod, teamId)
 
@@ -71,7 +72,7 @@ Key participants:
 ## Conventions
 
 - CLI output uses `mason_logger` (`Logger`) — use `logger.info`, `logger.err`, `logger.success`, `logger.progress`, `logger.confirm`.
-- Shell commands use `process_run` package, not `dart:io` Process directly.
+- Shell commands (flutter build, git) use `process_run` package. HTTP API calls (Firebase upload, OAuth2) use `http` package.
 - All commands accept an optional `projectPath` parameter (defaults to `Directory.current.path`) to support testing.
 - Config extractors and parsers are static-method-based classes, not instantiated.
 - The executable is registered as `pipo_firebase` in `pubspec.yaml` (maps to `bin/pipo_firebase_app_distribution.dart`).
