@@ -1,0 +1,4 @@
+conversation/
+CLAUDE.md
+.pipo_logs/
+.firebase-credentials.json

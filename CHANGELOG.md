@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.2] - 2026-03-12
+
+### Added
+- **Multiple tester groups**: `groups` field now supports array of group aliases per environment
+  ```yaml
+  groups:
+    - "internal-tester"
+    - "external-tester"
+  ```
+  Backward-compatible with legacy `group: "single-group"` format.
+
+- **Custom build args**: `extra_args`, `android_extra_args`, and `ios_extra_args` per environment
+  ```yaml
+  setup:
+    extra_args: ["--dart-define=ENV=dev"]
+    android_extra_args: ["--split-per-abi"]
+    ios_extra_args: ["--export-method=ad-hoc"]
+  ```
+
+### Improved
+- **Service account authentication**: Direct REST API upload — no Firebase CLI required
+- **Distribution logging**: Shows distribute API response for easier debugging when group assignment fails
+- **Deploy flow**: Build → Upload per platform (prevents `flutter clean` from deleting previous platform artifact)
+- **Skip build behavior**: `--skip-build` no longer increments version since the existing build already has the correct version
+
+### Fixed
+- Auto-assign testers/groups after upload now logs success/failure with actionable tips
+- `--platform` flag properly registered in argument parser
+
+---
+
 ## [0.0.1] - 2024-01-15
 
 ### ✨ Features
@@ -301,4 +332,5 @@ For more information, visit: https://pub.dev/packages/pipo_firebase_app_distribu
 - Build presets execution
 - Custom hooks support
 
+[0.0.2]: https://github.com/yourusername/pipo_firebase_app_distribution/releases/tag/v0.0.2
 [0.0.1]: https://github.com/yourusername/pipo_firebase_app_distribution/releases/tag/v0.0.1
