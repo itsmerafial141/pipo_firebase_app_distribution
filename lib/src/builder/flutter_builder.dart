@@ -400,27 +400,39 @@ class FlutterBuilder {
     required String buildMode,
     required String buildFormat,
   }) {
-    final outputDir = path.join(
-      basePath,
-      'build',
-      'app',
-      'outputs',
-      buildFormat,
-      environment,
-      buildMode,
-    );
-
-    final dir = Directory(outputDir);
-    if (!dir.existsSync()) return null;
-
     final extension = buildFormat == 'aab' ? '.aab' : '.apk';
-    final files = dir
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith(extension))
-        .toList();
+    final capitalizedMode =
+        buildMode[0].toUpperCase() + buildMode.substring(1);
 
-    return files.isNotEmpty ? files.first.path : null;
+    final candidateDirs = <String>[
+      if (buildFormat == 'aab') ...[
+        // AAB output: build/app/outputs/bundle/{flavor}Release/
+        path.join(basePath, 'build', 'app', 'outputs', 'bundle',
+            '$environment$capitalizedMode'),
+      ] else ...[
+        // APK output (modern): build/app/outputs/flutter-apk/
+        path.join(basePath, 'build', 'app', 'outputs', 'flutter-apk'),
+        // APK output (legacy): build/app/outputs/apk/{flavor}/release/
+        path.join(
+            basePath, 'build', 'app', 'outputs', 'apk', environment, buildMode),
+      ],
+    ];
+
+    for (final outputDir in candidateDirs) {
+      final dir = Directory(outputDir);
+      if (!dir.existsSync()) continue;
+
+      final files = dir
+          .listSync()
+          .whereType<File>()
+          .where((f) =>
+              f.path.endsWith(extension) && f.path.contains(environment))
+          .toList();
+
+      if (files.isNotEmpty) return files.first.path;
+    }
+
+    return null;
   }
 
   /// Find iOS artifact (IPA)

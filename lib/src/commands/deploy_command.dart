@@ -544,36 +544,33 @@ class DeployCommand {
     if (platform == 'android') {
       final buildFormat = buildConfig.platforms.android.buildFormat;
       final extension = buildFormat == 'aab' ? '.aab' : '.apk';
+      final buildMode = envConfig.setup.buildMode;
+      final capitalizedMode =
+          buildMode[0].toUpperCase() + buildMode.substring(1);
 
-      // Check standard Flutter output path
-      final outputDir = path.join(
-        basePath, 'build', 'app', 'outputs',
-        buildFormat == 'aab' ? 'bundle' : 'apk',
-        environment, envConfig.setup.buildMode,
-      );
+      final candidateDirs = <String>[
+        if (buildFormat == 'aab') ...[
+          // AAB output: build/app/outputs/bundle/{flavor}Release/
+          path.join(basePath, 'build', 'app', 'outputs', 'bundle',
+              '$environment$capitalizedMode'),
+        ] else ...[
+          // APK output (modern): build/app/outputs/flutter-apk/
+          path.join(basePath, 'build', 'app', 'outputs', 'flutter-apk'),
+          // APK output (legacy): build/app/outputs/apk/{flavor}/release/
+          path.join(
+              basePath, 'build', 'app', 'outputs', 'apk', environment, buildMode),
+        ],
+      ];
 
-      final dir = Directory(outputDir);
-      if (dir.existsSync()) {
+      for (final outputDir in candidateDirs) {
+        final dir = Directory(outputDir);
+        if (!dir.existsSync()) continue;
+
         final files = dir
             .listSync()
             .whereType<File>()
-            .where((f) => f.path.endsWith(extension))
-            .toList();
-        if (files.isNotEmpty) return files.first.path;
-      }
-
-      // Also check flutter-apk path (older Flutter versions)
-      final altDir = path.join(
-        basePath, 'build', 'app', 'outputs', 'flutter-apk',
-      );
-      final altDirObj = Directory(altDir);
-      if (altDirObj.existsSync()) {
-        final files = altDirObj
-            .listSync()
-            .whereType<File>()
             .where((f) =>
-                f.path.endsWith(extension) &&
-                f.path.contains(environment))
+                f.path.endsWith(extension) && f.path.contains(environment))
             .toList();
         if (files.isNotEmpty) return files.first.path;
       }
